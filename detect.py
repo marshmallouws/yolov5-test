@@ -28,6 +28,9 @@ import argparse
 import os
 import sys
 from pathlib import Path
+from flask import Flask, request
+app = Flask(__name__)
+
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -48,9 +51,9 @@ from utils.torch_utils import select_device, time_sync
 
 @torch.no_grad()
 def run(
-        weights=ROOT / 'yolov5s.pt',  # model.pt path(s)
-        source=ROOT / 'data/images',  # file/dir/URL/glob, 0 for webcam
-        data=ROOT / 'data/coco128.yaml',  # dataset.yaml path
+        source,
+        weights=ROOT / 'best.pt',  # model.pt path(s)
+        data=ROOT / 'data/data.yaml',  # dataset.yaml path
         imgsz=(640, 640),  # inference size (height, width)
         conf_thres=0.25,  # confidence threshold
         iou_thres=0.45,  # NMS IOU threshold
@@ -102,7 +105,7 @@ def run(
     else:
         dataset = LoadImages(source, img_size=imgsz, stride=stride, auto=pt)
         bs = 1  # batch_size
-    vid_path, vid_writer = [None] * bs, [None] * bs
+        vid_path, vid_writer = [None] * bs, [None] * bs
 
     # Run inference
     model.warmup(imgsz=(1 if pt else bs, 3, *imgsz))  # warmup
@@ -210,7 +213,7 @@ def run(
 
 def parse_opt():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'yolov5s.pt', help='model path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'best.pt', help='model path(s)')
     parser.add_argument('--source', type=str, default=ROOT / 'data/images', help='file/dir/URL/glob, 0 for webcam')
     parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='(optional) dataset.yaml path')
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640], help='inference size h,w')
@@ -242,11 +245,33 @@ def parse_opt():
     return opt
 
 
+import base64
+
+
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
     run(**vars(opt))
 
+def save_image(encoded_image):
+    with open("capture.jpg", "wb") as fh:
+        fh.write(base64.b64decode(encoded_image))
+
+@app.route('/detect', methods=['POST'])
+def hello_world():
+    request_data = request.get_json()
+    img = request_data['image']
+
+    save_image(img)
+    run("capture.jpg")
+
+    return request_data['image']
 
 if __name__ == "__main__":
-    opt = parse_opt()
-    main(opt)
+    app.run()
+    
+
+
+# TODO:
+# Endpoint som tager imod et billede Jsonne base64 encoded
+# Detect
+# Send resultat tilbage
