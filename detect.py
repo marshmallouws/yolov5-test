@@ -28,9 +28,6 @@ import argparse
 import os
 import sys
 from pathlib import Path
-from flask import Flask, request
-app = Flask(__name__)
-
 
 import torch
 import torch.backends.cudnn as cudnn
@@ -60,7 +57,7 @@ def run(
         max_det=1000,  # maximum detections per image
         device='',  # cuda device, i.e. 0 or 0,1,2,3 or cpu
         view_img=False,  # show results
-        save_txt=False,  # save results to *.txt
+        save_txt=True,  # save results to *.txt
         save_conf=False,  # save confidences in --save-txt labels
         save_crop=False,  # save cropped prediction boxes
         nosave=False,  # do not save images/videos
@@ -216,7 +213,7 @@ def parse_opt():
     parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'best.pt', help='model path(s)')
     parser.add_argument('--source', type=str, default=ROOT / 'data/images', help='file/dir/URL/glob, 0 for webcam')
     parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='(optional) dataset.yaml path')
-    parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640], help='inference size h,w')
+    parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[1280], help='inference size h,w')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.45, help='NMS IoU threshold')
     parser.add_argument('--max-det', type=int, default=1000, help='maximum detections per image')
@@ -244,30 +241,10 @@ def parse_opt():
     print_args(vars(opt))
     return opt
 
-
-import base64
-
-
 def main(opt):
     check_requirements(exclude=('tensorboard', 'thop'))
     run(**vars(opt))
 
-def save_image(encoded_image):
-    with open("capture.jpg", "wb") as fh:
-        fh.write(base64.b64decode(encoded_image))
-
-@app.route('/detect', methods=['POST'])
-def hello_world():
-    request_data = request.get_json()
-    img = request_data['image']
-
-    save_image(img)
-    run("capture.jpg")
-
-    return request_data['image']
-
-if __name__ == "__main__":
-    app.run()
     
 
 
