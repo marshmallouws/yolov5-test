@@ -1,42 +1,48 @@
 import base64
-
 import math
-from numpy import empty
+import os
 from torch import equal
 from detect import run
 from flask import Flask, request
 from os.path import exists
 import yaml
-import cv2
-import numpy as np
 from PIL.ExifTags import *
 from PIL import Image
 
 app = Flask(__name__)
 
+image_path = 'images/'
+
 def save_image(encoded_image, img_name):
-    image_name = "images/" + img_name
-    with open(img_name, "wb") as fh:
+    image_name = image_path + img_name
+    with open(image_name, "wb") as fh:
         fh.write(base64.b64decode(encoded_image))
     
+    increment_img_name()
+    # Rotate image
     im = Image.open(image_name)
-    im=im.rotate(270, expand=True)
+    im=im.rotate(90, expand=True)
     im.save(image_name)
+
+# Method to create test-images not used in application
+@app.route('/base64-encode')
+def base_64_encode_image_for_test():
+    img = request.args.get('image')
+
+    if img is not None and exists('test-images/'+img):
+        with open("test-images/" + img, "rb") as img_file:
+                return base64.b64encode(img_file.read())
+    
+    with open("test-images/13.jpg", "rb") as img_file:
+            return base64.b64encode(img_file.read())
 
 @app.route('/test-img', methods=['GET'])
 def get_test_img():
-    try:
-        img = request.args.get('image')
-        print(img)
-        if(exists(img)):
-            img = img
-        elif(exists("test-images/" + img)):
-            img = "test-images/" + img
-        else:
-            img = "test-images/test3.jpg"
-    except:
-        img = "test-images/test3.jpg"
-    run(img)
+    img = request.args.get('image')
+    if img is not None and exists('test-images/' + img):
+        run(img)
+    else:
+        run('test-images/test3.jpg')
     return "ok"
 
 @app.route('/detect', methods=['POST'])
@@ -44,14 +50,27 @@ def detect():
     request_data = request.get_json()
     img = request_data['image']
 
-    save_image(img)
-    run("capture.jpg")
+    img_no = str(increment_img_name())
+    image_name = img_no + '.jpg'
 
-    return request_data['image']
+    save_image(img, image_name)
+    run(image_path + image_name, name=img_no)
+    res = get_card_placing(img_no)
+
+    return res
+
+def increment_img_name():
+    highest = 0
+    for i in os.listdir('images/'):
+        no = int(i.split('.')[0])
+        if no > highest:
+            highest = no
+    highest = highest + 1 # number for new image
+    return highest
 
 @app.route("/test", methods=['GET'])
-def get_card_placing():
-    with open("runs/detect/exp/labels/12.txt", encoding="utf-8") as f:
+def get_card_placing(img_no):
+    with open("runs/detect/" + img_no +"/labels/" + img_no + ".txt", encoding="utf-8") as f:
         res = [[l for l in line.split()] for line in f] # load detections into list of lists.
         test = map_ids_with_classes()
         for i in range(len(res)):
@@ -70,8 +89,8 @@ def get_card_placing():
     print("'''"*20)
     
     print(remaining1)
-    test_tableaus(remaining1)
-    return""# convert_to_json(founds, talon, None)
+    tableaus = find_tableaus(remaining1)
+    return convert_to_json(founds, talon, tableaus)
 
 def convert_to_json(foundation, talon, tableaus):
     data = {"talon": talon,"f1": foundation[0], 
@@ -106,7 +125,7 @@ def test_tableaus(tableaus):
         
         seen.append(i[0])
 
-    print(tab)
+    return tab
         
 
 def find_tableaus(tableaus):
@@ -179,7 +198,7 @@ def find_talon(detection_list):
 
 def map_ids_with_classes():
     with open("data/data.yaml") as stream:
-        names = yaml.load(stream)['names']
+        names = yaml.safe_load(stream)['names']
         ids = [i for i in range(52)]
         res = {ids[i]: names[i] for i in range(len(names))}
     return res
